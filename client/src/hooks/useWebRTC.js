@@ -33,8 +33,18 @@ export default function useWebRTC(roomID) {
       }
 
       peerConnections.current[peerID] = new RTCPeerConnection({
-        iceServers: freeice(),
+        iceServers: [
+          {
+            urls: 'stun:stun.l.google.com:19302', // Пример STUN-сервера от Google
+          },
+          {
+            urls: 'turn:relay1.expressturn.com:3478', // Ваш TURN сервер
+            username: 'efY1N8CC9QW4SWCLD9',  // Имя пользователя для TURN сервера
+            credential: 'JiQ8WC2gbyA4G3Ja', // Пароль для TURN сервера
+          }
+        ],
       });
+      
 
       peerConnections.current[peerID].onicecandidate = event => {
         if (event.candidate) {
