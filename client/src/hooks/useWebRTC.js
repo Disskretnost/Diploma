@@ -9,7 +9,6 @@ export const LOCAL_VIDEO = 'LOCAL_VIDEO';
 
 export default function useWebRTC(roomID) {
   const [clients, updateClients] = useStateWithCallback([]);
-
   const addNewClient = useCallback((newClient, cb) => {
     updateClients(list => {
       if (!list.includes(newClient)) {
@@ -35,7 +34,7 @@ export default function useWebRTC(roomID) {
       peerConnections.current[peerID] = new RTCPeerConnection({
         iceServers: [
           {
-            urls: 'stun:stun.l.google.com:19302', // Пример STUN-сервера от Google
+            urls: 'stun:stun.l.google.com:19302', 
           },
           {
             urls: 'turn:relay1.expressturn.com:3478', // Ваш TURN сервер
@@ -44,7 +43,6 @@ export default function useWebRTC(roomID) {
           }
         ],
       });
-      
 
       peerConnections.current[peerID].onicecandidate = event => {
         if (event.candidate) {
