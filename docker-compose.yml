@@ -1,0 +1,73 @@
+version: '3'
+
+services:
+  # Контейнер с Node.js
+  server:
+    build:
+      context: ./server
+      target: dev
+    tty: true
+    working_dir: /opt/server
+    volumes:
+      - ./server:/opt/server
+    env_file:
+      - .env
+    expose:
+      - '3000'
+      - '4200'
+    depends_on:
+      - db
+    networks:
+      - app_network  # Подключаем к сети
+
+  # Контейнер с базой данных
+  db:
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=Videoconferencing
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    expose:
+      - '5432'
+    restart: always
+    networks:
+      - app_network  # Подключаем к сети
+
+  nginx:
+    container_name: proxy_nginx
+    depends_on:
+      - server
+      - db
+      - pgadmin
+    image: nginx:latest
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+      - ./client/build:/var/www/static
+    restart: always
+    networks:
+      - app_network  # Подключаем к сети
+
+  # Контейнер с pgadmin
+  pgadmin:
+    container_name: pgadmin
+    depends_on:
+      - db
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: info@proglib.io
+      PGADMIN_DEFAULT_PASSWORD: qwertyuiop
+    expose:
+      - '80'
+    restart: always
+    networks:
+      - app_network  # Подключаем к сети
+    
+
+# Определение единой сети
+networks:
+  app_network:
+    driver: bridge  # Используем стандартный драйвер сети
