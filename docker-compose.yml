@@ -36,20 +36,20 @@ services:
       - app_network  # Подключаем к сети
 
   nginx:
-    build:
-      context: .  # Теперь `Dockerfile` видит `client`
-      dockerfile: nginx/Dockerfile  # Указываем, что берем `Dockerfile` из папки `nginx`
-    container_name: proxy_nginx
-    ports:
-      - '80:80'
-    restart: always
-    volumes:
-      - ./nginx:/etc/nginx/conf.d
-    depends_on:
-      - server
-      - db
-    networks:
-      - app_network
+      build:
+        context: .  # Контекст сборки — корень проекта
+        dockerfile: nginx/Dockerfile
+      container_name: proxy_nginx
+      ports:
+        - '80:80'
+      restart: always
+      volumes:
+        - ./nginx:/etc/nginx/conf.d
+      depends_on:
+        - server
+        - db
+      networks:
+        - app_network
 
   # Контейнер с pgadmin
   pgadmin:

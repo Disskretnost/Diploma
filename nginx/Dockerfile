@@ -3,12 +3,12 @@ FROM node:16-alpine AS build
 
 WORKDIR /app
 
-# Копируем package.json и package-lock.json, устанавливаем зависимости
-COPY ../client/package.json ../client/package-lock.json ./
+# Копируем package.json и package-lock.json
+COPY client/package.json client/package-lock.json ./
 RUN npm install
 
 # Копируем весь код и собираем приложение
-COPY ../client /app
+COPY client /app
 RUN npm run build
 
 # Этап 2: Настройка Nginx
