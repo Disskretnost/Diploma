@@ -13,8 +13,9 @@ require('dotenv').config({ path: '../.env' });  // Указываем путь �
 const ACTIONS = require('./socket/actions')
 app.use(express.json());  // Для парсинга JSON в запросах
 app.use(cors({
-  credentials: true,  // Разрешаем передачу cookies
-  origin: process.env.CORS_CLIENT  // Разрешенный origin
+  origin: ['http://localhost:3000', 'http://138.124.93.138'], // Указываем разрешенные источники
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Разрешенные методы
+  allowedHeaders: ['Content-Type', 'Authorization'], // Разрешенные заголовки
 }));
 
 // Настроим маршруты
