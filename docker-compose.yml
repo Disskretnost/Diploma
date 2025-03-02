@@ -22,7 +22,7 @@ services:
 
   # Контейнер с базой данных
   db:
-    image: postgres:latest
+    image: postgres:14-alpine  # Используем postgres:14-alpine
     environment:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -36,20 +36,20 @@ services:
       - app_network  # Подключаем к сети
 
   nginx:
+    build:
+      context: .  # Теперь `Dockerfile` видит `client`
+      dockerfile: nginx/Dockerfile  # Указываем, что берем `Dockerfile` из папки `nginx`
     container_name: proxy_nginx
+    ports:
+      - '80:80'
+    restart: always
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
     depends_on:
       - server
       - db
-      - pgadmin
-    image: nginx:latest
-    ports:
-      - '80:80'
-    volumes:
-      - ./nginx:/etc/nginx/conf.d
-      - ./client/build:/var/www/static
-    restart: always
     networks:
-      - app_network  # Подключаем к сети
+      - app_network
 
   # Контейнер с pgadmin
   pgadmin:
