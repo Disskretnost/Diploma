@@ -12,9 +12,9 @@ const app = express();
 require('dotenv').config({ path: '../.env' });  // Указываем путь к файлу .env на один уровень выше
 const ACTIONS = require('./socket/actions')
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://138.124.93.138'], // Указываем разрешенные источники
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Разрешенные методы
-  allowedHeaders: ['Content-Type', 'Authorization'], // Разрешенные заголовки
+  origin: '*',  // Разрешить доступ с любых доменов
+  methods: '*',  // Разрешить все методы HTTP
+  allowedHeaders: '*',  // Разрешить все заголовки
 }));
 app.use(express.json());  // Для парсинга JSON в запросах
 
@@ -29,11 +29,13 @@ const server = http.createServer(app);
 // Инициализация Socket.IO с этим сервером
 const io = new socketIO.Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
-    methods: ['GET', 'POST'],
-    credentials: true,
+    origin: '*',  // Разрешить все источники
+    methods: '*',  // Разрешить все методы
+    credentials: true,  
   },
 });
+
+
 function getClientRooms() {
   const {rooms} = io.sockets.adapter;
 
