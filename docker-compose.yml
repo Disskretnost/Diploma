@@ -42,9 +42,11 @@ services:
       container_name: proxy_nginx
       ports:
         - '80:80'
+        - "443:443"
       restart: always
       volumes:
         - ./nginx:/etc/nginx/conf.d
+        - /etc/letsencrypt:/etc/letsencrypt
       depends_on:
         - server
         - db
