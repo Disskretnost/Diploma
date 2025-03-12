@@ -8,8 +8,6 @@ services:
       target: dev
     tty: true
     working_dir: /opt/server
-    volumes:
-      - ./server:/opt/server
     env_file:
       - .env
     expose:

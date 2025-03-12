@@ -1,11 +1,22 @@
-FROM node:16.10.0-alpine AS dev
-RUN apk add --no-cache tzdata
+
+FROM node:18-bullseye AS dev
+
+# Устанавливаем системные зависимости
 ENV TZ Europe/Moscow
+
+# Указываем путь для node_modules
 ENV NODE_PATH /opt/server/node_modules
 
-WORKDIR /opt/server/
+# Устанавливаем рабочую директорию
+WORKDIR /opt/server
 
-COPY /*.json ./
-RUN npm i
+# Копируем package.json и package-lock.json для установки зависимостей
+COPY package.json ./
 
-CMD ["node", "index.js"]
+RUN npm install -g node-pre-gyp
+    
+RUN npm install
+
+COPY . .
+
+CMD ["npm", "run", "dev"]

@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 import RegisterPage from './pages/RegisterPage';
 import AuthService from './services/AuthService';
 import Room from './/pages/Room/room';
+import SimpleSFUClient from './pages/VideoConference/VideoConference';
 
 
 const App = () => {
@@ -33,8 +34,8 @@ const App = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<HomePage /> } />
-
+      <Route path="/" element={<SimpleSFUClient /> } />
+      <Route path="/login" element={<LoginPage /> } />
       <Route path="/home" element={<HomePage /> } />
       <Route path="/room/:id" element={<Room />} />
     </Routes>

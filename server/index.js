@@ -7,15 +7,18 @@ const models = require('./models');
 const cors = require('cors');
 const http = require('http');  // Для создания HTTP сервера
 const router = require('./routes/index');
-const socketIO = require('socket.io');  // Подключаем Socket.IO
+const { v4: uuidv4 } = require('uuid'); // Импортируем функцию
 const app = express();
 require('dotenv').config({ path: '../.env' });  // Указываем путь к файлу .env на один уровень выше
-const ACTIONS = require('./socket/actions')
+const webrtc = require('wrtc');
+const WebSocket = require('ws'); 
 app.use(cors({
-  origin: '*',  // Разрешить доступ с любых доменов
-  methods: '*',  // Разрешить все методы HTTP
-  allowedHeaders: '*',  // Разрешить все заголовки
-}));
+    origin: 'http://nginx',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true, // Для передачи JWT/cookies
+  }));
+
 app.use(express.json());  // Для парсинга JSON в запросах
 
 
@@ -26,102 +29,167 @@ app.use(errorMiddlewares);  // Промежуточное ПО для обраб
 // Создаем HTTP сервер и передаем его в Socket.IO
 const server = http.createServer(app);
 
-// Инициализация Socket.IO с этим сервером
-const io = new socketIO.Server(server, {
-  cors: {
-    origin: '*',  // Разрешить все источники
-    methods: '*',  // Разрешить все методы
-    credentials: true,  
-  },
-});
 
+let peers = new Map();
+let consumers = new Map();
 
-function getClientRooms() {
-  const {rooms} = io.sockets.adapter;
+function handleTrackEvent(e, peer, ws) {
+    if (e.streams && e.streams[0]) {
+        const stream = e.streams[0];
 
-  return Array.from(rooms.keys()).filter(roomID => validate(roomID) && version(roomID) === 4);
-}
+        // Не отправлять локальный поток другим пользователям
+        if (stream.id === peers.get(peer).stream?.id) {
+            return; // Это локальный поток, не рассылаем
+        }
 
-function shareRoomsInfo() {
-  io.emit(ACTIONS.SHARE_ROOMS, {
-    rooms: getClientRooms()
-  })
-}
+        peers.get(peer).stream = stream;
 
-
-io.on('connection', socket => {
-  console.log("Подлючение ");
-  shareRoomsInfo();
-
-  socket.on(ACTIONS.JOIN, config => {
-    const {room: roomID} = config;
-    const {rooms: joinedRooms} = socket;
-
-    if (Array.from(joinedRooms).includes(roomID)) {
-      return console.warn(`Already joined to ${roomID}`);
+        const payload = {
+            type: 'newProducer',
+            id: peer,
+            username: peers.get(peer).username
+        };
+        wss.broadcast(JSON.stringify(payload));
     }
+}
 
-    const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
 
-    clients.forEach(clientID => {
-      io.to(clientID).emit(ACTIONS.ADD_PEER, {
-        peerID: socket.id,
-        createOffer: false
-      });
-
-      socket.emit(ACTIONS.ADD_PEER, {
-        peerID: clientID,
-        createOffer: true,
-      });
+function createPeer() {
+    let peer = new webrtc.RTCPeerConnection({
+        iceServers: [
+            {
+              urls: 'stun:stun.l.google.com:19302', 
+            },
+            {
+              urls: 'turn:relay1.expressturn.com:3478', // Ваш TURN сервер
+              username: 'efY1N8CC9QW4SWCLD9',  // Имя пользователя для TURN сервера
+              credential: 'JiQ8WC2gbyA4G3Ja', // Пароль для TURN сервера
+            }
+          ],
     });
 
-    socket.join(roomID);
-    shareRoomsInfo();
-  });
-  function leaveRoom() {
-    const {rooms} = socket;
+    return peer;
+}
 
-    Array.from(rooms)
-      // LEAVE ONLY CLIENT CREATED ROOM
-      .filter(roomID => validate(roomID) && version(roomID) === 4)
-      .forEach(roomID => {
+// Create a server for handling websocket calls
+const wss = new WebSocket.Server({ server: server });
 
-        const clients = Array.from(io.sockets.adapter.rooms.get(roomID) || []);
 
-        clients
-          .forEach(clientID => {
-          io.to(clientID).emit(ACTIONS.REMOVE_PEER, {
-            peerID: socket.id,
-          });
+wss.on('connection', function (ws) {
+    let peerId = uuidv4();
+    console.log("сервер срабатывает");
+    ws.id = peerId;
+    ws.on('close', (event) => {
+        peers.delete(ws.id);
+        consumers.delete(ws.id);
 
-          socket.emit(ACTIONS.REMOVE_PEER, {
-            peerID: clientID,
-          });
-        });
-
-        socket.leave(roomID);
-      });
-
-    shareRoomsInfo();
-  }
-
-  socket.on(ACTIONS.LEAVE, leaveRoom);
-  socket.on('disconnecting', leaveRoom);
-  socket.on(ACTIONS.RELAY_SDP, ({peerID, sessionDescription}) => {
-    io.to(peerID).emit(ACTIONS.SESSION_DESCRIPTION, {
-      peerID: socket.id,
-      sessionDescription,
+        wss.broadcast(JSON.stringify({
+            type: 'user_left',
+            id: ws.id
+        }));
     });
-  });
 
-  socket.on(ACTIONS.RELAY_ICE, ({peerID, iceCandidate}) => {
-    io.to(peerID).emit(ACTIONS.ICE_CANDIDATE, {
-      peerID: socket.id,
-      iceCandidate,
+
+    ws.send(JSON.stringify({ 'type': 'welcome', id: peerId }));
+    ws.on('message', async function (message) {
+        const body = JSON.parse(message);
+        switch (body.type) {
+            case 'connect':
+                peers.set(body.uqid, { socket: ws });
+                const peer = createPeer();
+                peers.get(body.uqid).username = body.username;
+                peers.get(body.uqid).peer = peer;
+                peer.ontrack = (e) => { handleTrackEvent(e, body.uqid, ws) };
+                const desc = new webrtc.RTCSessionDescription(body.sdp);
+                await peer.setRemoteDescription(desc);
+                const answer = await peer.createAnswer();
+                await peer.setLocalDescription(answer);
+
+
+
+                const payload = {
+                    type: 'answer',
+                    sdp: peer.localDescription
+                }
+
+                ws.send(JSON.stringify(payload));
+                break;
+            case 'getPeers':
+                let uuid = body.uqid;
+                const list = [];
+                peers.forEach((peer, key) => {
+                    if (key != uuid) {
+                        const peerInfo = {
+                            id: key,
+                            username: peer.username,
+                        }
+                        list.push(peerInfo);
+                    }
+                });
+
+                const peersPayload = {
+                    type: 'peers',
+                    peers: list
+                }
+
+                ws.send(JSON.stringify(peersPayload));
+                break;
+            case 'ice':
+                const user = peers.get(body.uqid);
+                if (user.peer)
+                    user.peer.addIceCandidate(new webrtc.RTCIceCandidate(body.ice)).catch(e => console.log(e));
+                break;
+            case 'consume':
+                try {
+                    let { id, sdp, consumerId } = body;
+                    const remoteUser = peers.get(id);
+                    const newPeer = createPeer();
+                    consumers.set(consumerId, newPeer);
+                    const _desc = new webrtc.RTCSessionDescription(sdp);
+                    await consumers.get(consumerId).setRemoteDescription(_desc);
+
+                    remoteUser.stream.getTracks().forEach(track => {
+                        consumers.get(consumerId).addTrack(track, remoteUser.stream);
+                    });
+                    const _answer = await consumers.get(consumerId).createAnswer();
+                    await consumers.get(consumerId).setLocalDescription(_answer);
+
+                    const _payload = {
+                        type: 'consume',
+                        sdp: consumers.get(consumerId).localDescription,
+                        username: remoteUser.username,
+                        id,
+                        consumerId
+                    }
+
+                    ws.send(JSON.stringify(_payload));
+                } catch (error) {
+                    console.log(error)
+                }
+
+                break;
+            case 'consumer_ice':
+                if (consumers.has(body.consumerId)) {
+                    consumers.get(body.consumerId).addIceCandidate(new webrtc.RTCIceCandidate(body.ice)).catch(e => console.log(e));
+                }
+                break;
+            default:
+                wss.broadcast(message);
+
+        }
     });
-  });
 
+    ws.on('error', () => ws.terminate());
 });
+
+wss.broadcast = function (data) {
+    peers.forEach(function (peer) {
+        if (peer.socket.readyState === WebSocket.OPEN) {
+            peer.socket.send(data);
+        }
+    });
+};
+
 
 // Запуск сервера
 const start = async () => {
